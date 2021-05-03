@@ -4,24 +4,54 @@
       <div>
         <div class="step-card">
           <div>初始投资</div>
-          <div class="text-sm margin-top">投资建议</div>
-          <div class="text-bold">买入1%</div>
+          <el-row class="margin-top">
+            <el-col :span="12">
+              <div class="text-sm">投资建议</div>
+              <div class="text-bold">买入1%</div>
+            </el-col>
+            <el-col :span="12">
+              <div class="text-sm">投资结果</div>
+              <div class="text-bold">等待计算</div>
+            </el-col>
+          </el-row>
         </div>
         <div class="step-card-choose margin-top">
           <div>第1次投资</div>
-          <div class="text-sm margin-top">投资建议</div>
-          <div class="text-bold">等待计算中</div>
+          <el-row class="margin-top">
+            <el-col :span="12">
+              <div class="text-sm">投资建议</div>
+              <div class="text-bold">等待计算</div>
+            </el-col>
+            <el-col :span="12">
+              <div class="text-sm">投资结果</div>
+              <div class="text-bold">等待计算</div>
+            </el-col>
+          </el-row>
         </div>
       </div>
     </el-aside>
     <el-main>
       <el-row type="flex" justify="center" align="middle" style="height: 100vh">
         <el-col :xs="22" :sm="20" :md="18" :lg="16" :xl="14">
-          <el-row>
+          <el-row class="trading-desc">
+            <el-col class="detail-box" :span="8">
+              <div class="text-xl text-bold">200</div>
+              <div class="text-sm">累计收益</div>
+            </el-col>
+            <el-col class="detail-box" :span="8">
+              <div class="text-xl text-bold">20%</div>
+              <div class="text-sm">累计收益率</div>
+            </el-col>
+            <el-col class="detail-box" :span="8">
+              <div class="text-xl text-bold">2</div>
+              <div class="text-sm">盈利次数</div>
+            </el-col>
+          </el-row>
+          <el-row class="margin-top-lg" v-show="false">
             <el-col>
-              <div class="margin-top-lg">
+              <div>
                 <el-input
-                  placeholder="请输入本轮的涨跌幅，例如：-0.15（-15%）"
+                  placeholder="请输入本轮的涨跌幅，例如：-15（-15%）"
                   v-model="input2"
                 >
                   <template v-slot:append>提交计算</template>
@@ -30,7 +60,7 @@
             </el-col>
           </el-row>
           <!-- 仓位价值 -->
-          <el-row>
+          <el-row type="flex" justify="space-between">
             <el-col class="detail-box" :span="4">
               <div class="text-sm">涨跌幅</div>
               <div class="text-lg text-bold">10%</div>
@@ -42,10 +72,6 @@
             <el-col class="detail-box" :span="4">
               <div class="text-sm">累计本金</div>
               <div class="text-lg text-bold">10000</div>
-            </el-col>
-            <el-col class="detail-box" :span="4">
-              <div class="text-sm">净收益</div>
-              <div class="text-lg text-bold">100</div>
             </el-col>
             <el-col class="detail-box" :span="4">
               <div class="text-sm">可买金额</div>
@@ -71,8 +97,18 @@
           <!-- 策略解读 -->
           <div class="trading-desc margin-top-lg">
             <div>策略解读：</div>
-            <!-- 一号算法 -->
-            <div>一号算法：在所有可能的决策里面，找到最低的盈利预期涨跌幅</div>
+            <!-- 算法a结果数量 > 0,执行算法b -->
+            <div class="margin-top">
+              在所有可能的决策中包含了大概率保本的决策，选择其中最大化预期收益
+            </div>
+            <!-- 算法a结果数量 == 0, 且平均涨跌幅 > 0 -->
+            <div class="margin-top">
+              在所有可能的决策中不包含大概率保本的决策，但是平均涨跌幅大于0，还是有概率能回本，所以调整仓位在预期平均涨幅的情况下最接近可以回本的比例
+            </div>
+            <!-- 算法a结果数量 == 0, 且平均涨跌幅 <= 0 -->
+            <div class="margin-top">
+              在所有可能的决策中不包含大概率保本的决策，且平均涨跌幅小于0，无法回本的概率较大，加大投入或者减少投入都有可能造成不可挽回的损失，所以暂时不调整仓位
+            </div>
           </div>
         </el-col>
       </el-row>
@@ -82,7 +118,18 @@
 
 <script setup>
 import { ref } from "vue";
-let tradingStrategyPerviewList = ref([]);
+// 盈利次数
+let winTimes = ref(0);
+// 左手边的投资预览 [本轮涨跌幅，改变建议，投资结果，是否已提交计算，是否已确认操作]
+let tradingPerviewList = ref([]);
+// 每轮的投资结果 [涨跌幅，总价值，累计本金，净收益，可买金额，可卖金额]
+let tradingDetailList = ref([]);
+// 每轮的投资选择 {chooseIndex: 0, reason:""}
+let tradingChooseList = ref([]);
+// 投资结果模板 买入1%-100%、卖出1%-100%、不操作
+// 标题，交易类型，交易比例，最大预期跌幅结果，最大跌幅结果减本金的差，回本需要的最小预期涨幅
+// {title:"买入1%",tradingType:"buy",rate:0.01,maxFallResult:1000,reduceFall:200,minExpPaybackRate:0.2}
+let tradingStrList = ref([]);
 function onClick() {
   maplist.value = [1, 2, 3, 4, 5, 6];
 }
@@ -96,7 +143,7 @@ body {
   background-color: #fafafa;
   padding: 20px;
 }
-.el-main{
+.el-main {
   padding: 0;
 }
 .step-card {
@@ -116,6 +163,9 @@ body {
 }
 .text-lg {
   font-size: 24px;
+}
+.text-xl {
+  font-size: 36px;
 }
 .text-bold {
   font-weight: bold;
@@ -158,12 +208,12 @@ body {
   justify-content: space-between;
   align-items: center;
 }
-.detail-box{
+.detail-box {
   text-align: center;
   padding: 20px;
   color: #666;
 }
-.trading-desc{
+.trading-desc {
   background-color: #fafafa;
   color: #888;
   border-radius: 5px;
